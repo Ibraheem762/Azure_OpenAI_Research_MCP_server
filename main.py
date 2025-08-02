@@ -6,14 +6,11 @@ This server implements the Model Context Protocol (MCP) with search and fetch
 capabilities designed to work with ChatGPT's deep research feature.
 """
 
-import json
 import logging
 import os
-from typing import Dict, List, Any, Optional
-from pathlib import Path
+from typing import Dict, List, Any
 
 from fastmcp import FastMCP
-import uvicorn
 from openai import OpenAI
 
 # Configure logging
@@ -22,12 +19,17 @@ logger = logging.getLogger(__name__)
 
 # OpenAI configuration
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-VECTOR_STORE_ID = "vs_682552f3ab90819185d4b99adcae7a07"
+VECTOR_STORE_ID = os.environ.get("VECTOR_STORE_ID", "")
 
 # Initialize OpenAI client
-openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+openai_client = OpenAI()
 
-# No local data storage needed - using OpenAI Vector Store only
+server_instructions = """
+This MCP server provides search and document retrieval capabilities 
+for deep research. Use the search tool to find relevant documents 
+based on keywords, then use the fetch tool to retrieve complete 
+document content with citations.
+"""
 
 
 def create_server():
@@ -35,13 +37,7 @@ def create_server():
 
     # Initialize the FastMCP server
     mcp = FastMCP(name="Sample Deep Research MCP Server",
-                  instructions="""
-        This MCP server provides search and document retrieval capabilities for deep research.
-        Use the search tool to find relevant documents based on keywords, then use the fetch 
-        tool to retrieve complete document content with citations.
-        """)
-
-
+                  instructions=server_instructions)
 
     @mcp.tool()
     async def search(query: str) -> Dict[str, List[Dict[str, Any]]]:
@@ -68,11 +64,8 @@ def create_server():
                 "OpenAI API key is required for vector store search")
 
         # Search the vector store using OpenAI API
-        logger.info(
-            f"Searching vector store {VECTOR_STORE_ID} for query: '{query}'")
+        logger.info(f"Searching {VECTOR_STORE_ID} for query: '{query}'")
 
-        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
-        # do not change this unless explicitly requested by the user
         response = openai_client.vector_stores.search(
             vector_store_id=VECTOR_STORE_ID, query=query)
 
@@ -81,7 +74,7 @@ def create_server():
         # Process the vector store search results
         if hasattr(response, 'data') and response.data:
             for i, item in enumerate(response.data):
-                # Extract file_id, filename, and content from the VectorStoreSearchResponse
+                # Extract file_id, filename, and content
                 item_id = getattr(item, 'file_id', f"vs_{i}")
                 item_filename = getattr(item, 'filename', f"Document {i+1}")
 
@@ -107,7 +100,8 @@ def create_server():
                     "id": item_id,
                     "title": item_filename,
                     "text": text_snippet,
-                    "url": f"https://platform.openai.com/storage/files/{item_id}"
+                    "url":
+                    f"https://platform.openai.com/storage/files/{item_id}"
                 }
 
                 results.append(result)
@@ -118,17 +112,18 @@ def create_server():
     @mcp.tool()
     async def fetch(id: str) -> Dict[str, Any]:
         """
-        Retrieve complete document content by ID for detailed analysis and citation.
-        
-        This tool fetches the full document content from OpenAI Vector Store or local storage.
-        Use this after finding relevant documents with the search tool to get complete 
+        Retrieve complete document content by ID for detailed 
+        analysis and citation. This tool fetches the full document 
+        content from OpenAI Vector Store. Use this after finding 
+        relevant documents with the search tool to get complete 
         information for analysis and proper citation.
         
         Args:
             id: File ID from vector store (file-xxx) or local document ID
             
         Returns:
-            Complete document with id, title, full text content, optional URL, and metadata
+            Complete document with id, title, full text content, 
+            optional URL, and metadata
             
         Raises:
             ValueError: If the specified ID is not found
@@ -165,7 +160,7 @@ def create_server():
 
         # Use filename as title and create proper URL for citations
         filename = getattr(file_info, 'filename', f"Document {id}")
-        
+
         result = {
             "id": id,
             "title": filename,
@@ -178,7 +173,7 @@ def create_server():
         if hasattr(file_info, 'attributes') and file_info.attributes:
             result["metadata"] = file_info.attributes
 
-        logger.info(f"Successfully fetched vector store file: {id}")
+        logger.info(f"Fetched vector store file: {id}")
         return result
 
     return mcp
@@ -201,7 +196,6 @@ def main():
     # Configure and start the server
     logger.info("Starting MCP server on 0.0.0.0:8000")
     logger.info("Server will be accessible via SSE transport")
-    logger.info("Connect this server to ChatGPT Deep Research for testing")
 
     try:
         # Use FastMCP's built-in run method with SSE transport
