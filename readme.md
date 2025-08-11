@@ -1,6 +1,6 @@
 # Azure OpenAI MCP Server for Vector Search
 
-This is a Model Context Protocol (MCP) server designed to work with ChatGPT's Deep Research feature using Azure OpenAI. It provides semantic search through Azure OpenAI's Vector Store API and document retrieval capabilities, demonstrating how to build custom MCP servers that can extend ChatGPT with company-specific knowledge and tools using Azure's enterprise-grade AI services.
+This is a Model Context Protocol (MCP) server designed to work with Deep Research using Azure OpenAI. It provides semantic search through Azure OpenAI's Vector Store API and document retrieval capabilities, demonstrating how to build custom MCP servers that can extend ChatGPT with company-specific knowledge and tools using Azure's enterprise-grade AI services.
 
 ## Features
 
